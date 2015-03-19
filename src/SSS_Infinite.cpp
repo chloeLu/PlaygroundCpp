@@ -1,9 +1,9 @@
 //============================================================================
-// Name        : PlaygroundCpp.cpp
+// Name        : SSS_Infinite.cpp
 // Author      : Chloe Lu
 // Version     :
 // Copyright   : 
-// Description : Hello World in C++, Ansi-style
+// Description : SSS assuming infinite resource
 //============================================================================
 #include <iostream>
 #include <fstream>
@@ -167,6 +167,7 @@ int main(int argc, char *argv[]) {
 //		}
 //	}
 
+	// since can read in unlimited number of instructions, we can construct the dependency table for all instructions now
 	map<int, set<int>*> dMap = constructDependencyMap(instructions);
 
 	cout << "# cycles needed:" << endl;
