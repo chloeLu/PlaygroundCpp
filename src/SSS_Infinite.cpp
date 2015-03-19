@@ -2,7 +2,7 @@
 // Name        : SSS_Infinite.cpp
 // Author      : Chloe Lu
 // Version     :
-// Copyright   : 
+// Copyright   :
 // Description : SSS assuming infinite resource
 //============================================================================
 #include <iostream>
@@ -96,7 +96,7 @@ map<int, set<int>*> constructDependencyMap(vector<vector<int> > data) {
 		// detect RAW dependencies on following instructions
 		int dest = data[i][0];
 		int latency = data[i][3];
-		for (unsigned j = i + 1; (j <= i + latency && j < data.size()); j++) {
+		for (unsigned j = i + 1; (latency>0 && j < data.size()); j++) {
 			if (dest == data[j][1] || dest == data[j][2]) {
 				dMap[j]->insert(i);
 			}
