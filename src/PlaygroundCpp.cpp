@@ -86,7 +86,7 @@ vector<map<int, string>* > constructRenamingMap(vector<vector<int> > data) {
 
 unsigned int run(vector<vector<int> > instructions, vector<map<int, string>* > rrm) {
 	unsigned int timeElapsed = 0;
-	map<int, set<int> > dependencyMap;
+	map<int, set<int> > dependencyMap;;
 }
 
 int main(int argc, char *argv[]) {
