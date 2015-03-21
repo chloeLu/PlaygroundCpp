@@ -3,7 +3,9 @@
 // Author      : Chloe Lu
 // Version     :
 // Copyright   :
-// Description : SSS assuming limited instruction window
+// Description : Simulates CPU execution with true data dependency.
+// 				 Args: <executable> <inFilePath> <windowSize>(optional) <numExecUnits>(optional)
+//				 The program assumes unlimited windowSize and numExecutionUnits if the args are missing
 //============================================================================
 #include <iostream>
 #include <fstream>
@@ -38,8 +40,8 @@ struct Tuple {
 	int src2d;
 };
 
+// Util function to read and parse the input data
 void readData(string infileStr, vector<vector<int> >& data) {
-	// assume data cannot be over than 1000 lines
 	string line;
 	ifstream myfile(infileStr);
 	if (myfile.is_open()) {
@@ -85,8 +87,6 @@ map<int, Tuple*> constructDependencyMap(vector<vector<int> > data, const int win
 			}
 		}
 	}
-
-	cout << " windowsize:" << windowSize << "mapSize:" << dMap.size() << endl;
 	return dMap;
 }
 
@@ -101,7 +101,6 @@ void updateDependencyMap(vector<vector<int> > instructions, map<int, Tuple*>& dM
 	int eIndex = sIndex + windowSize;
 	for (unsigned i = sIndex; (i < eIndex && i < instructions.size()); i++) {
 
-		cout << "adding instruction #" << i << "to dMap" << endl;
 		dMap[i] = new Tuple();
 		dMap[i]->src1d = -1;
 		dMap[i]->src2d = -1;
@@ -114,11 +113,11 @@ void updateDependencyMap(vector<vector<int> > instructions, map<int, Tuple*>& dM
 			int prevDest = instructions[instrId][0];
 			if (prevDest == instructions[i][1]) {
 				dMap[i]->src1d = instrId;
-				cout << "instruction #" << i << " is dependent on #" << instrId << endl;
+//				cout << "instruction #" << i << " is dependent on #" << instrId << endl;
 			}
 			if (prevDest == instructions[i][2]) {
 				dMap[i]->src2d = instrId;
-				cout << "instruction #" << i << " is dependent on #" << instrId << endl;
+//				cout << "instruction #" << i << " is dependent on #" << instrId << endl;
 			}
 		}
 	}
@@ -137,16 +136,14 @@ unsigned int run(vector<vector<int> > instr, const int windowSize, const int num
 		numExecUnit = numExecUnitIn;
 	}
 
-	cout << "num execution unit:" << numExecUnit << endl;
+//	cout << "num execution unit:" << numExecUnit << endl;
 
 	set<int> instrToExecute;
 	while (!dMap.empty()) {
 		// find instructions to execute
-		cout << "original size:" << instrToExecute.size() << endl;
 		int numNewInstr = 0;
 		for (map<int, Tuple*>::iterator it = dMap.begin(); it != dMap.end(); it++) {
 			if (numNewInstr >= numExecUnit) {
-				cout << "im here!" << endl;
 				break;
 			}
 			int instrId = it->first;
@@ -165,24 +162,11 @@ unsigned int run(vector<vector<int> > instr, const int windowSize, const int num
 			int instrId = *current;
 			if (instr.at(instrId)[3] > 1) {
 				instr.at(instrId)[3]--;
-				cout << "running instr #" << instrId << endl;
 			} else {
-				cout << "erasing instr #" << instrId << endl;
 				dMap.erase(dMap.find(instrId));
 				instrToExecute.erase(current);
 			}
 		}
-
-//		for (int instrId : instrToExecute) {
-//			if (instr.at(instrId)[3] > 1) {
-//				instr.at(instrId)[3]--;
-//				cout << "running instr #" << instrId << endl;
-//			} else {
-//				cout << "erasing instr #" << instrId << endl;
-//				dMap.erase(dMap.find(instrId));
-//			}
-//		}
-
 
 		//update dependencies in dMap
 		for (map<int, Tuple*>::iterator it = dMap.begin(); it != dMap.end(); it++) {
@@ -199,8 +183,7 @@ unsigned int run(vector<vector<int> > instr, const int windowSize, const int num
 		if (windowSize != INVALID_OPT) {
 			updateDependencyMap(instr, dMap, windowSize, sIndex);
 		}
-		cout << "updated dependency" << endl;
-		cout << "map size: " << dMap.size() << endl;
+//		cout << "map size: " << dMap.size() << endl;
 		timeElapsed++;
 
 		if (timeElapsed > 10) {
