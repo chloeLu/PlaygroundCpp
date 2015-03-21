@@ -15,6 +15,8 @@
 #include <map>
 using namespace std;
 
+const int INVALID_OPT = -1;
+
 class LabelGenerator {
 	unsigned count;
 public:
@@ -28,6 +30,11 @@ public:
 		return (sstm.str());
 	}
 	;
+};
+
+struct Tuple {
+	int src1d;
+	int src2d;
 };
 
 void readData(string infileStr, vector<vector<int> >& data) {
@@ -50,44 +57,67 @@ void readData(string infileStr, vector<vector<int> >& data) {
 	}
 }
 
-map<int, set<int>*> constructDependencyMap(vector<vector<int> > instructions, const int windowSize) {
-	// dMap should be of window size same as user input
-	map<int, set<int>*> dMap;
-	for (unsigned i = 0; i < windowSize; i++) {
-		set<int>* v = new set<int>();
-		dMap[i] = v;
+/**
+ * Dependency Map: a structure that contains <instructinId, dependencyTuple>
+ * instructionId: the id of instr, starting fron 0
+ * dependencyTuple: a tuple that stores the id of previous instructions that the current instruction has RAW dependency on
+ */
+map<int, Tuple*> constructDependencyMap(vector<vector<int> > data, const int windowSize) {
+	// create and init the map
+	map<int, Tuple*> dMap;
+	int dMapSize = windowSize == INVALID_OPT ? data.size() : windowSize;
+	for (unsigned i = 0; i < dMapSize; i++) {
+		dMap[i] = new Tuple();
+		dMap[i]->src1d = -1;
+		dMap[i]->src2d = -1;
 	}
 
-	for (unsigned i = 0; (i < windowSize && i < instructions.size()); i++) {
-		int dest = instructions[i][0];
-		int latency = instructions[i][3];
-		for (unsigned j = i + 1; (j <= i + latency && j < windowSize && j < instructions.size()); j++) {
-			if (dest == instructions[j][1] || dest == instructions[j][2]) {
-				dMap[j]->insert(i);
+	for (unsigned i = 0; i < dMapSize; i++) {
+		// detect RAW dependencies on following instructions
+		int dest = data[i][0];
+		for (unsigned j = i + 1; j < dMapSize; j++) {
+			if (dest == data[j][1]) {
+				dMap[j]->src1d = i;
+			}
+			if (dest == data[j][2]) {
+				dMap[j]->src2d = i;
 			}
 		}
 	}
 
+	cout << " windowsize:" << windowSize << "mapSize:" << dMap.size() << endl;
 	return dMap;
 }
 
-void updateDependencyMap(vector<vector<int> > instructions, map<int, set<int>*>& dMap, const int windowSize,
-		int& sIndex) {
-	// dMap should be of window size same as user input
-	int eIndex = sIndex + windowSize - dMap.size();
+/**
+ * After each cycle, this method is called to update the dMap, reading new set of <windowSize> instructions, and assign the correct dependency tuple
+ */
+void updateDependencyMap(vector<vector<int> > instructions, map<int, Tuple*>& dMap, const int windowSize, int& sIndex) {
+	if (sIndex >= instructions.size()) {
+		return; // no need to read more instructions
+	}
+
+	int eIndex = sIndex + windowSize;
 	for (unsigned i = sIndex; (i < eIndex && i < instructions.size()); i++) {
-		dMap[i] = new set<int>();
+
+		cout << "adding instruction #" << i << "to dMap" << endl;
+		dMap[i] = new Tuple();
+		dMap[i]->src1d = -1;
+		dMap[i]->src2d = -1;
 		// update dependency of new instructions
-		cout << "instruction #" << i << " is added to dMap" << endl;
-		for (map<int, set<int>*>::iterator it = dMap.begin(); it != dMap.end(); it++) {
+		for (map<int, Tuple*>::iterator it = dMap.begin(); it != dMap.end(); it++) {
 			int instrId = it->first;
 			if (instrId == i) {
 				break;
 			}
 			int prevDest = instructions[instrId][0];
-			if (prevDest == instructions[i][1] || prevDest == instructions[i][2]) {
-				dMap[i]->insert(instrId);
-				cout << "dependent on #" << instrId << endl;
+			if (prevDest == instructions[i][1]) {
+				dMap[i]->src1d = instrId;
+				cout << "instruction #" << i << " is dependent on #" << instrId << endl;
+			}
+			if (prevDest == instructions[i][2]) {
+				dMap[i]->src2d = instrId;
+				cout << "instruction #" << i << " is dependent on #" << instrId << endl;
 			}
 		}
 	}
@@ -96,15 +126,15 @@ void updateDependencyMap(vector<vector<int> > instructions, map<int, set<int>*>&
 
 unsigned int run(vector<vector<int> > instr, const int windowSize) {
 	unsigned int timeElapsed = 0;
-	map<int, set<int>*> dMap = constructDependencyMap(instr, windowSize);
+	map<int, Tuple*> dMap = constructDependencyMap(instr, windowSize);
 	int sIndex = windowSize;
 
 	while (!dMap.empty()) {
 		// find instructions to execute
 		set<int> instrToExecute;
-		for (map<int, set<int>*>::iterator it = dMap.begin(); it != dMap.end(); it++) {
+		for (map<int, Tuple*>::iterator it = dMap.begin(); it != dMap.end(); it++) {
 			int instrId = it->first;
-			if (it->second->empty()) {
+			if (it->second->src1d == -1 && it->second->src2d == -1) {
 				instrToExecute.insert(instrId);
 			}
 		}
@@ -113,47 +143,66 @@ unsigned int run(vector<vector<int> > instr, const int windowSize) {
 		for (int instrId : instrToExecute) {
 			if (instr.at(instrId)[3] > 1) {
 				instr.at(instrId)[3]--;
+				cout << "running instr #" << instrId << endl;
 			} else {
+				cout << "erasing instr #" << instrId << endl;
 				dMap.erase(dMap.find(instrId));
 			}
 		}
 
 		//update dependencies in dMap
-		for (map<int, set<int>*>::iterator it = dMap.begin(); it != dMap.end(); it++) {
-			set<int>* dependency = it->second;
-			for (set<int>::iterator setIt = dependency->begin(); setIt != dependency->end();) {
-				if (dMap.find(*setIt) == dMap.end()) {
-					dependency->erase(setIt++);
-				} else {
-					++setIt;
-				}
+		for (map<int, Tuple*>::iterator it = dMap.begin(); it != dMap.end(); it++) {
+			Tuple* dependency = it->second;
+
+			if (dependency->src1d != -1 && dMap.find(dependency->src1d) == dMap.end()) {
+				dependency->src1d = -1;
+			}
+			if (dependency->src2d != -1 && dMap.find(dependency->src2d) == dMap.end()) {
+				dependency->src2d = -1;
 			}
 		}
 
-		updateDependencyMap(instr, dMap, windowSize, sIndex);
-
+		if (windowSize != INVALID_OPT) {
+			updateDependencyMap(instr, dMap, windowSize, sIndex);
+		}
+		cout << "updated dependency" << endl;
+		cout << "map size: " << dMap.size() << endl;
 		timeElapsed++;
+
+		if (timeElapsed > 10) {
+			return timeElapsed;
+		}
 	}
 	return timeElapsed;
 }
 
 int main(int argc, char *argv[]) {
-	string infileStr = argv[1];
-	if (infileStr.empty()) {
+	if (argc < 2) {
 		cout << "Argument needed! Exiting.. " << endl;
 		exit(1);
 	}
+	string infileStr = argv[1];
 	vector<vector<int> > instructions;
 	readData(infileStr, instructions);
 
-	string wSizeStr = argv[2];
-	if (wSizeStr.empty()) {
-		cout << "Window size needed! Exiting.. " << endl;
-		exit(1);
-	}
-	const int windowSize = atoi(argv[2]);
+	int windowSize;
+	int numExe;
 
-	cout << "# cycles needed:" << endl;
+	switch (argc) {
+	case 2:
+		windowSize = INVALID_OPT;
+		numExe = INVALID_OPT;
+		break;
+	case 3:
+		windowSize = atoi(argv[2]);
+		numExe = INVALID_OPT;
+		break;
+	case 4:
+		windowSize = atoi(argv[2]);
+		numExe = atoi(argv[3]);
+		break;
+
+	}
 	cout << run(instructions, windowSize) << endl;
 
 	return 0;
