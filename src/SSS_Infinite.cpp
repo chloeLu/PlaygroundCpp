@@ -30,6 +30,11 @@ public:
 	;
 };
 
+struct Tuple {
+	int src1d;
+	int src2d;
+};
+
 void readData(string infileStr, vector<vector<int> >& data) {
 	// assume data cannot be over than 1000 lines
 	string line;
@@ -83,41 +88,43 @@ vector<map<int, string>*> constructRenamingMap(vector<vector<int> > data) {
 	return rrm;
 }
 
-map<int, set<int>*> constructDependencyMap(vector<vector<int> > data) {
-
+map<int, Tuple*> constructDependencyMap(vector<vector<int> > data) {
 	// create and init the map
-	map<int, set<int>*> dMap;
+	map<int, Tuple*> dMap;
 	for (unsigned i = 0; i < data.size(); i++) {
-		set<int>* v = new set<int>();
-		dMap[i] = v;
+		dMap[i] = new Tuple();
+		dMap[i]->src1d=-1;
+		dMap[i]->src2d=-1;
 	}
 
 	for (unsigned i = 0; i < data.size(); i++) {
 		// detect RAW dependencies on following instructions
 		int dest = data[i][0];
-		int latency = data[i][3];
-		for (unsigned j = i + 1; (latency>0 && j < data.size()); j++) {
-			if (dest == data[j][1] || dest == data[j][2]) {
-				dMap[j]->insert(i);
+		for (unsigned j = i + 1; (j < data.size()); j++) {
+			if (dest == data[j][1]) {
+				cout<< "instruction " <<j << " src1d is dependent on instr "<<i<<endl;
+				dMap[j]->src1d = i;
+			}
+			if (dest == data[j][2]) {
+				cout<< "instruction " <<j << " src2d is dependent on instr "<<i<<endl;
+				dMap[j]->src2d = i;
 			}
 		}
 	}
-
 	return dMap;
 }
 
-unsigned int run(map<int, set<int>*> dMap, vector<vector<int> > instr) {
+unsigned int run(map<int, Tuple* > dMap, vector<vector<int> > instr) {
 	unsigned int timeElapsed = 0;
 	while (!dMap.empty()) {
 		// find instructions to execute
 		set<int> instrToExecute;
-		for (map<int, set<int>*>::iterator it = dMap.begin(); it != dMap.end(); it++) {
+		for (map<int, Tuple* >::iterator it = dMap.begin(); it != dMap.end(); it++) {
 			int instrId = it->first;
-			if (it->second->empty()) {
+			cout<<"instr id=" << instrId << "dependencies: " << it->second->src1d << " " << it->second->src2d << endl;
+			if (it->second->src1d==-1 && it->second->src2d==-1) {
 				instrToExecute.insert(instrId);
-//				cout << "cycle #" << timeElapsed << "; executing instr #" << instrId << endl;
-//				cout << instr.at(instrId)[0] << " " << instr.at(instrId)[1] << " " << instr.at(instrId)[2] << " "
-//						<< instr.at(instrId)[3] << " " << endl;
+				cout << "cycle #" << timeElapsed << "; executing instr #" << instrId << endl;
 			}
 		}
 
@@ -126,24 +133,29 @@ unsigned int run(map<int, set<int>*> dMap, vector<vector<int> > instr) {
 			if (instr.at(instrId)[3] > 1) {
 				instr.at(instrId)[3]--;
 			} else {
+				cout<<"erasing:"<<instrId<<endl;
 				dMap.erase(dMap.find(instrId));
+
 			}
 		}
 
 		//update dependencies in dMap
-		for (map<int, set<int>*>::iterator it = dMap.begin(); it != dMap.end(); it++) {
-			set<int>* dependency = it->second;
-			for (set<int>::iterator setIt = dependency->begin(); setIt != dependency->end();) {
-				if (dMap.find(*setIt) == dMap.end()) {
-					dependency->erase(setIt++);
-				} else {
-					++setIt;
-				}
+		for (map<int, Tuple* >::iterator it = dMap.begin(); it != dMap.end(); it++) {
+			Tuple* dependency = it->second;
+
+			if (dependency->src1d != -1 && dMap.find(dependency->src1d) == dMap.end()) {
+				dependency->src1d = -1;
+			}
+			if (dependency->src2d != -1 && dMap.find(dependency->src2d) == dMap.end()) {
+				dependency->src2d = -1;
 			}
 		}
 
 		timeElapsed++;
-//		cout << "time elapsed:" << timeElapsed << endl;
+		cout << "time elapsed:" << timeElapsed << endl;
+		if (timeElapsed>10){
+			return timeElapsed;
+		}
 	}
 	return timeElapsed;
 }
@@ -157,18 +169,7 @@ int main(int argc, char *argv[]) {
 	vector<vector<int> > instructions;
 	readData(infileStr, instructions);
 
-//	vector<map<int, string>* > rrm = constructRenamingMap(instructions);
-//
-//	int count = 1;
-//	for (map<int, string>* aMap : rrm) {
-//		cout << count++ << endl;
-//		for (map<int, string>::iterator iterator = aMap->begin(); iterator != aMap->end(); iterator++) {
-//			cout << "Register:" << iterator->first << "; Label:" << iterator->second << endl;
-//		}
-//	}
-
-	// since can read in unlimited number of instructions, we can construct the dependency table for all instructions now
-	map<int, set<int>*> dMap = constructDependencyMap(instructions);
+	map<int, Tuple* > dMap = constructDependencyMap(instructions);
 
 	cout << "# cycles needed:" << endl;
 	cout << run(dMap, instructions) << endl;
