@@ -91,15 +91,17 @@ map<int, Tuple*> constructDependencyMap(vector<vector<int> > data, const int win
 }
 
 /**
- * After each cycle, this method is called to update the dMap, reading new set of <windowSize> instructions, and assign the correct dependency tuple
+ * After each cycle, this method is called to update the dMap
+ * The returning dMap always contain up to <windowSize> unissued instructions
  */
-void updateDependencyMap(vector<vector<int> > instructions, map<int, Tuple*>& dMap, const int windowSize, int& sIndex) {
+void updateDependencyMap(vector<vector<int> > instructions, map<int, Tuple*>& dMap, const int windowSize, int& sIndex, int numInstrExecuting) {
 	if (sIndex >= instructions.size()) {
 		return; // no need to read more instructions
 	}
 
-	int eIndex = sIndex + windowSize;
+	int eIndex = sIndex + windowSize - (dMap.size()-numInstrExecuting);
 	for (unsigned i = sIndex; (i < eIndex && i < instructions.size()); i++) {
+//		cout << "inserting instruction #" << i << "to dMap"<< endl;
 
 		dMap[i] = new Tuple();
 		dMap[i]->src1d = -1;
@@ -138,7 +140,7 @@ unsigned int run(vector<vector<int> > instr, const int windowSize, const int num
 
 //	cout << "num execution unit:" << numExecUnit << endl;
 
-	set<int> instrToExecute;
+	set<int> instrInExecution;
 	while (!dMap.empty()) {
 		// find instructions to execute
 		int numNewInstr = 0;
@@ -148,23 +150,25 @@ unsigned int run(vector<vector<int> > instr, const int windowSize, const int num
 			}
 			int instrId = it->first;
 			if (it->second->src1d == -1 && it->second->src2d == -1) {
-				if (instrToExecute.find(instrId) == instrToExecute.end()) {
-					instrToExecute.insert(instrId);
+				if (instrInExecution.find(instrId) == instrInExecution.end()) {
+					instrInExecution.insert(instrId);
 					numNewInstr++;
 				}
 			}
 		}
 
-		set<int>::iterator it = instrToExecute.begin();
-		while (it != instrToExecute.end()) {
+		set<int>::iterator it = instrInExecution.begin();
+		while (it != instrInExecution.end()) {
 			// copy the current iterator then increment it
 			std::set<int>::iterator current = it++;
 			int instrId = *current;
 			if (instr.at(instrId)[3] > 1) {
+//				cout<<"executing instr #" << instrId << endl;
 				instr.at(instrId)[3]--;
 			} else {
 				dMap.erase(dMap.find(instrId));
-				instrToExecute.erase(current);
+				instrInExecution.erase(current);
+//				cout<<"completing instr #" << instrId << endl;
 			}
 		}
 
@@ -181,14 +185,11 @@ unsigned int run(vector<vector<int> > instr, const int windowSize, const int num
 		}
 
 		if (windowSize != INVALID_OPT) {
-			updateDependencyMap(instr, dMap, windowSize, sIndex);
+			updateDependencyMap(instr, dMap, windowSize, sIndex, instrInExecution.size());
 		}
 //		cout << "map size: " << dMap.size() << endl;
+//		cout << "cycle #" << timeElapsed << endl;
 		timeElapsed++;
-
-		if (timeElapsed > 10) {
-			return timeElapsed;
-		}
 	}
 	return timeElapsed;
 }
